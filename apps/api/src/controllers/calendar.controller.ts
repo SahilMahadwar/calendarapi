@@ -26,11 +26,25 @@ export const listCalendarEvents = asyncHandler(async (req, res, next) => {
 export const createCalendarEvent = asyncHandler(async (req, res, next) => {
   const { access_token, refresh_token, expiry_date, event } = req.body;
 
+  console.log(event);
+
   if (!access_token || !refresh_token || !expiry_date || !event) {
     return next(
       new ErrorResponse({
         message:
           "Access token, refresh token, event and expiry date are required",
+        statusCode: 400,
+      })
+    );
+  }
+
+  const startDate = new Date(event.start.dateTime);
+  const endDate = new Date(event.end.dateTime);
+
+  if (endDate <= startDate) {
+    return next(
+      new ErrorResponse({
+        message: "End date must be after start date",
         statusCode: 400,
       })
     );

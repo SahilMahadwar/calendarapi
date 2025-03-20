@@ -62,12 +62,12 @@ export const createEvent = async ({
       summary: event.summary,
       description: event.description,
       start: {
-        dateTime: event.start.dateTime,
-        timeZone: event.start.timeZone,
+        dateTime: new Date(event.start.dateTime).toISOString(),
+        timeZone: "Asia/Kolkata",
       },
       end: {
-        dateTime: event.end.dateTime,
-        timeZone: event.end.timeZone,
+        dateTime: new Date(event.end.dateTime).toISOString(),
+        timeZone: "Asia/Kolkata",
       },
     },
   });
