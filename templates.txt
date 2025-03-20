@@ -1,0 +1,335 @@
+===== Controllers ====
+import { lucia } from "../configs/lucia.config";
+import { asyncHandler } from "../middlewares/async-handler.middleware";
+import { Session } from "../models/session.model";
+import { User } from "../models/user.model";
+import {
+  createSession,
+  generateAndSendOtp,
+  validateOTP,
+} from "../services/auth.service";
+import { ErrorResponse } from "../utils/error-response.util";
+import { getIp } from "../utils/ip-util";
+
+// Create Todo
+// export const createTodo = asyncHandler(async (req, res, next) => {
+//   return res.respond({ data: { test: "create todo" }, statusCode: 200 });
+// });
+
+
+// Login using OTP
+export const otpLogin = asyncHandler(async (req, res, next) => {
+  const { otp, email } = req.body;
+
+  // Find or create user using email
+  let user = await User.findOne({ email: email });
+
+  if (!user) {
+    user = await User.create({
+      email: email,
+    });
+  }
+
+  // Validate OTP
+  const isValidOTP = await validateOTP({ email: email, otp: otp });
+
+  if (!isValidOTP) {
+    return next(
+      new ErrorResponse({
+        message: "Invalid or expired OTP",
+        statusCode: 400,
+      })
+    );
+  }
+
+  // Create session
+  const session = await createSession({
+    ip: getIp(req),
+    rawUa: req.headers["user-agent"] as string,
+    userId: user._id as string,
+  });
+
+  if (!session) {
+    return next(
+      new ErrorResponse({
+        message: "Failed to create session",
+        statusCode: 400,
+      })
+    );
+  }
+
+  return res
+    .appendHeader(
+      "Set-Cookie",
+      lucia.createSessionCookie(session.id).serialize()
+    )
+    .respond({
+      statusCode: 201,
+      data: { user: user.transform() },
+      message: "User logged in successfully",
+    });
+});
+
+// Get logged in user
+export const getLoggedInUser = asyncHandler(async (req, res, next) => {
+  const transformedUser = res.locals.dbUser!.transform();
+
+  return res.respond({
+    statusCode: 200,
+    data: { user: transformedUser },
+    message: "Fetched logged in user",
+  });
+});
+
+export const getLoggedInUserSessions = asyncHandler(async (req, res, next) => {
+  const sessions = await lucia.getUserSessions(
+    res.locals.dbUser!._id as string
+  );
+
+  const formattedSessions = sessions.map((session) => {
+    return {
+      id: session.id,
+      ip: session.ip,
+      ipInfo: session.ipInfo,
+      deviceInfo: session.deviceInfo,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    };
+  });
+
+  // Sort to place the current session on top, then sort by updatedAt
+  formattedSessions.sort((a, b) => {
+    if (a.id === res.locals.session!.id) return -1;
+    if (b.id === res.locals.session!.id) return 1;
+    return b.updatedAt.getTime() - a.updatedAt.getTime();
+  });
+
+  return res.respond({
+    statusCode: 200,
+    data: {
+      totalSessions: formattedSessions.length,
+      sessions: formattedSessions,
+    },
+    message: "Fetched sessions",
+  });
+});
+
+export const deleteUserSession = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+
+  const session = await Session.findById(id);
+
+  if (!session) {
+    return next(
+      new ErrorResponse({
+        message: "Session not found",
+        statusCode: 404,
+      })
+    );
+  }
+
+  if (session.user_id !== res.locals.dbUser!.id.toString()) {
+    return next(
+      new ErrorResponse({
+        message: "Unauthorized",
+        statusCode: 500,
+      })
+    );
+  }
+
+  await lucia.invalidateSession(session._id);
+
+  return res.respond({
+    statusCode: 200,
+    data: {
+      sessions: true,
+    },
+    message: "Session deleted successfully",
+  });
+});
+
+
+=== Routes ===
+import express from "express";
+import { validate } from "express-validation";
+
+import {
+  deleteUserSession,
+  generateOtp,
+  getLoggedInUser,
+  getLoggedInUserSessions,
+  otpLogin,
+} from "../controllers/auth.controller";
+import protectedRoute from "../middlewares/protected-route.middleware";
+import { authValidations } from "../validations/auth.validation";
+
+export const authRouter = express.Router();
+
+authRouter
+  .route("/generate-otp")
+  .post(validate(authValidations.generateOtp), generateOtp);
+
+authRouter
+  .route("/login/otp")
+  .post(validate(authValidations.otpLogin), otpLogin);
+
+authRouter.route("/current-user").get(protectedRoute(), getLoggedInUser);
+
+// sessions
+authRouter
+  .route("/current-user/sessions")
+  .get(protectedRoute(), getLoggedInUserSessions);
+
+authRouter
+  .route("/current-user/sessions/:id")
+  .delete(
+    validate(authValidations.deleteUserSession),
+    protectedRoute(),
+    deleteUserSession
+  );
+
+// authRouter.route("/login/github").post(otpLogin);
+// authRouter.route("/login/github/callback").post(otpLogin);
+
+import express from "express";
+import { authRouter } from "./auth.route";
+import { userRouter } from "./user.route";
+
+export const routes = express.Router();
+
+routes.get("/status", (req, res) => res.send("OK"));
+
+// For quick tests
+routes.post("/test", (req, res) => {
+  res.respond({ data: { test: "test" }, statusCode: 200 });
+});
+
+// users
+routes.use("/users", userRouter);
+
+// auth
+routes.use("/auth", authRouter);
+
+
+=== Services ===
+import parser from "ua-parser-js";
+import { lucia } from "../configs/lucia.config";
+import { otpTemplate } from "../emails/otp-template";
+import { OTP } from "../models/otp.model";
+import { formatIp, getIpData } from "../utils/ip-util";
+import { sendMail } from "./email.service";
+
+export const generateAndSendOtp = async ({ email }: { email: string }) => {
+  // Generate OTP
+  const generateOTP = Math.floor(100000 + Math.random() * 900000);
+
+  // Create OTP record
+  const otpRecord = await OTP.create({
+    email: email,
+    otp: generateOTP,
+  });
+
+  // Send mail
+  const mailOptions = {
+    from: 'Express" <no-reply@express.com>',
+    to: email,
+    subject: "Verify Email",
+    html: otpTemplate({ otp: parseInt(otpRecord.otp) }),
+  };
+
+  const emailStatus = await sendMail(mailOptions);
+
+  if (emailStatus.accepted.length > 0) {
+    return emailStatus.accepted[0];
+  } else {
+    return false;
+  }
+};
+
+export const validateOTP = async ({
+  email,
+  otp,
+}: {
+  email: string;
+  otp: number;
+}) => {
+  // Find the OTP record for the given email
+  const otpRecord = await OTP.findOne({ email: email, otp: otp });
+
+  if (!otpRecord) {
+    return false;
+  }
+
+  // Check if the OTP has not expired
+  const currentTime = new Date();
+
+  if (otpRecord.expiresAt < currentTime) {
+    return false;
+  }
+
+  // Remove the OTP document from the database so it can't be used more than once
+  await OTP.deleteOne({ email: email, otp: otp });
+
+  return true;
+};
+
+export const createSession = async ({
+  ip,
+  rawUa,
+  userId,
+}: {
+  ip: string | undefined;
+  rawUa: string;
+  userId: string;
+}) => {
+  // Get Ip data
+  const ipInfo = await getIpData({ ip: ip });
+
+  // Parse user agent
+  const ua = parser(rawUa);
+
+  try {
+    const session = await lucia.createSession(userId as string, {
+      ip: formatIp({ ip: ip }),
+      ip_info: ipInfo,
+      device_info: {
+        ua: ua.ua,
+        browser: ua.browser,
+        device: ua.device,
+        os: ua.os,
+      },
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    return session;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+=== validation ===
+
+import Joi from "joi";
+
+const otpLogin = {
+  body: Joi.object({
+    email: Joi.string().email().required(),
+    otp: Joi.number().required(),
+  }),
+};
+
+const generateOtp = {
+  body: Joi.object({
+    email: Joi.string().email().required(),
+  }),
+};
+
+const deleteUserSession = {
+  params: Joi.object({
+    id: Joi.string().required(),
+  }),
+};
+
+export const authValidations = { otpLogin, generateOtp, deleteUserSession };
