@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { useCalendar } from "@/hooks/use-calendar";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
+import React from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -52,6 +53,7 @@ const formSchema = z
 export function CreateEventDialog() {
   const { createCalendarEvent } = useCalendar();
   const isLoading = createCalendarEvent.isPending;
+  const [open, setOpen] = React.useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -69,11 +71,16 @@ export function CreateEventDialog() {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    createCalendarEvent.mutate(values);
+    createCalendarEvent.mutate(values, {
+      onSuccess: () => {
+        setOpen(false);
+        form.reset();
+      },
+    });
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="default">Create Event</Button>
       </DialogTrigger>
