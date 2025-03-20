@@ -1,5 +1,6 @@
 import express from "express";
 import { authRouter } from "./auth.route";
+import { calendarRouter } from "./calendar.route";
 
 export const routes = express.Router();
 
@@ -12,3 +13,5 @@ routes.post("/test", (req, res) => {
 
 // auth routes
 routes.use("/auth", authRouter);
+
+routes.use("/calendar", calendarRouter);
