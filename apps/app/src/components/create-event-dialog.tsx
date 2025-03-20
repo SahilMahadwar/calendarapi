@@ -21,11 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCalendar } from "@/hooks/use-calendar";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 const formSchema = z
   .object({
+    location: z.string(),
     summary: z.string(),
     description: z.string(),
     start: z.object({
@@ -49,10 +51,12 @@ const formSchema = z
 
 export function CreateEventDialog() {
   const { createCalendarEvent } = useCalendar();
+  const isLoading = createCalendarEvent.isPending;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      location: "",
       summary: "",
       description: "",
       start: {
@@ -71,7 +75,7 @@ export function CreateEventDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">Create Event</Button>
+        <Button variant="default">Create Event</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -110,6 +114,19 @@ export function CreateEventDialog() {
             />
             <FormField
               control={form.control}
+              name="location"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Location</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Event location" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="start.dateTime"
               render={({ field }) => (
                 <FormItem>
@@ -136,7 +153,16 @@ export function CreateEventDialog() {
               )}
             />
 
-            <Button type="submit">Create Event</Button>
+            <Button disabled={isLoading} type="submit">
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Event"
+              )}
+            </Button>
           </form>
         </Form>
       </DialogContent>

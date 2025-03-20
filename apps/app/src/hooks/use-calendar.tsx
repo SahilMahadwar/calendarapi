@@ -9,11 +9,14 @@ import {
 import { CalendarEventInput } from "@/types/common";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
+import { useToast } from "./use-toast";
 
 export const useCalendar = () => {
   const { getTokens } = useAuth();
 
   const { access_token, expiry_date, refresh_token } = getTokens();
+
+  const { toast } = useToast();
 
   const getCalendarEvents = useQuery({
     queryFn: async () => {
@@ -38,6 +41,11 @@ export const useCalendar = () => {
       );
     },
     onSuccess: ({ data }) => {
+      toast({
+        title: "Scheduled: Catch up ",
+        description: "Friday, February 10, 2023 at 5:57 PM",
+      });
+
       queryClient.invalidateQueries({
         queryKey: ["calendar"],
       });

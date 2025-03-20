@@ -45,6 +45,7 @@ export interface CalendarEvent {
     dateTime: string;
     timeZone: string;
   };
+  location: string;
   iCalUID: string;
   sequence: number;
   reminders: {

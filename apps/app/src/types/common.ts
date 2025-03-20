@@ -1,4 +1,5 @@
 export interface CalendarEventInput {
+  location: string;
   summary: string;
   description: string;
   start: {

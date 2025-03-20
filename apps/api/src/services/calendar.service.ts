@@ -59,6 +59,7 @@ export const createEvent = async ({
   const calendarList = await calendar.events.insert({
     calendarId: "primary",
     requestBody: {
+      location: event.location,
       summary: event.summary,
       description: event.description,
       start: {
