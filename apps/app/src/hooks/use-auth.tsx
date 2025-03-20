@@ -5,8 +5,11 @@ import {
   OAuthUrlData,
 } from "@/types/api-res";
 import { useMutation } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
 export const useAuth = () => {
+  const navigate = useNavigate();
+
   const verifyToken = useMutation({
     mutationFn: async (code: string | null) => {
       return axiosApiInstance.get<ApiResponse<GoogleTokenResponse>>(
@@ -15,6 +18,8 @@ export const useAuth = () => {
     },
 
     onSuccess: async ({ data }) => {
+      console.log("reached");
+
       const { access_token, refresh_token, expiry_date } = data.data;
 
       if (access_token && refresh_token && expiry_date) {
@@ -22,6 +27,8 @@ export const useAuth = () => {
         localStorage.setItem("refresh_token", refresh_token);
         localStorage.setItem("expiry_date", expiry_date.toString());
       }
+
+      navigate("/");
     },
   });
 
@@ -52,5 +59,13 @@ export const useAuth = () => {
     return { access_token, refresh_token, expiry_date };
   };
 
-  return { verifyToken, getLoginUrl, getTokens };
+  const removeTokens = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("expiry_date");
+
+    return true;
+  };
+
+  return { verifyToken, getLoginUrl, getTokens, removeTokens };
 };

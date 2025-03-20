@@ -1,6 +1,11 @@
 import { axiosApiInstance } from "@/libs/axios-api-Instance";
 import { queryClient } from "@/libs/react-query/query-client";
-import { ApiResponse, GoogleTokenResponse } from "@/types/api-res";
+import {
+  ApiResponse,
+  CalendarEvent,
+  CalendarEvents,
+  GoogleTokenResponse,
+} from "@/types/api-res";
 import { CalendarEventInput } from "@/types/common";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
@@ -12,7 +17,7 @@ export const useCalendar = () => {
 
   const getCalendarEvents = useQuery({
     queryFn: async () => {
-      return axiosApiInstance.get<ApiResponse<GoogleTokenResponse>>(
+      return axiosApiInstance.get<ApiResponse<CalendarEvents>>(
         `/calendar/events?access_token=${access_token}&refresh_token=${refresh_token}&expiry_date=${expiry_date}`
       );
     },

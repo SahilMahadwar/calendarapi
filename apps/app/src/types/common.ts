@@ -3,10 +3,10 @@ export interface CalendarEventInput {
   description: string;
   start: {
     dateTime: string;
-    timeZone: string;
+    // timeZone: string;
   };
   end: {
     dateTime: string;
-    timeZone: string;
+    // timeZone: string;
   };
 }
